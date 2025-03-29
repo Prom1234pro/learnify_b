@@ -1,0 +1,40 @@
+# bcrypt
+# click
+# colorama
+cloudinary
+edge-tts
+Flask
+Flask-Bcrypt
+Flask-Cors
+# flask-restx
+Flask-JWT-Extended
+# Flask-Login
+Flask-Mail
+Flask-Migrate
+Flask-Script
+# Flask-Session
+Flask-SocketIO
+firebase-admin
+# Flask-SQLAlchemy
+# Flask-UUID
+# gunicorn
+google-ai-generativelanguage
+google-api-core
+google-api-python-client
+google-auth
+google-auth-httplib2
+google-auth-oauthlib
+google-generativeai
+googleapis-common-protos
+# Jinja2
+pdf2image
+PyPDF2
+# psycopg2-binary
+# PyJWT
+# pyodbc
+python-dotenv
+# python-engineio
+python-socketio
+# SQLAlchemy
+# requests
+# Werkzeug
