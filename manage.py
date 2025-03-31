@@ -1,10 +1,10 @@
 import os
-from datetime import datetime
+# from datetime import datetime
 from dotenv import load_dotenv
-import json
-import base64
-import firebase_admin
-from firebase_admin import credentials, firestore
+# import json
+# import base64
+# import firebase_admin
+# from firebase_admin import credentials, firestore
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import google.generativeai as genai
@@ -13,11 +13,11 @@ import google.generativeai as genai
 load_dotenv()
 
 
-firebase_creds_json = base64.b64decode(os.getenv("FIREBASE_CREDENTIALS")).decode("utf-8")
-firebase_creds = json.loads(firebase_creds_json)
-cred = credentials.Certificate(firebase_creds)
-firebase_admin.initialize_app(cred)
-db = firestore.client()
+# firebase_creds_json = base64.b64decode(os.getenv("FIREBASE_CREDENTIALS")).decode("utf-8")
+# firebase_creds = json.loads(firebase_creds_json)
+# cred = credentials.Certificate(firebase_creds)
+# firebase_admin.initialize_app(cred)
+# db = firestore.client()
 
 
 app = Flask(__name__)
@@ -29,24 +29,43 @@ UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)  # Ensure upload folder exists
 
 
-def get_chat_history(user_id, session_id): #Done
-    """Fetch chat history from Firestore."""
-    try:
-        session_ref = db.collection("users").document(user_id).collection("chatSessions").document(session_id)
-        session_data = session_ref.get().to_dict()
+# def get_chat_history(user_id, session_id): #Done
+#     """Fetch chat history from Firestore."""
+#     try:
+#         print("here 1")
+#         session_ref = db.collection("users").document(user_id).collection("chatSessions").document(session_id)
+#         session_data = session_ref.get().to_dict()
         
-        if not session_data:
-            return []
+#         print("here 2")
+#         if not session_data:
+#             return []
 
-        messages = []
-        for key in sorted(session_data.keys(), key=lambda k: int(k) if k.isdigit() else float("inf")):
-            if isinstance(session_data[key], dict):
-                messages.append(session_data[key])
+#         messages = []
+#         print("here 3")
+#         for key in sorted(session_data.keys(), key=lambda k: int(k) if k.isdigit() else float("inf")):
+#             if isinstance(session_data[key], dict):
+#                 messages.append(session_data[key])
 
-        return messages
-    except Exception as e:
-        print(f"Error fetching chat history: {e}")
-        return []
+#         print("here 4")
+#         return messages
+#     except Exception as e:
+#         print(f"Error fetching chat history: {e}")
+#         return []
+    
+# def get_chat_history(user_id, session_id):
+#     """Fetch chat history from Firestore."""
+#     session_ref = db.collection("users").document(user_id).collection("chatSessions").document(session_id)
+#     session_data = session_ref.get().to_dict()
+    
+#     if not session_data:
+#         return []
+
+#     messages = []
+#     for key in sorted(session_data.keys(), key=lambda k: int(k) if k.isdigit() else float("inf")):
+#         if isinstance(session_data[key], dict):
+#             messages.append(session_data[key])
+
+#     return messages
 
 
 def generate_gemini_response(chat_history, user_message, file_uris=None): #Done
@@ -187,7 +206,7 @@ def upload_file():
         return jsonify({"error": f"An unexpected error occurred: {str(e)}"}), 500
 
 
-@app.route("/chat", methods=["POST"]) #Done
+@app.route("/chat", methods=["POST"])  # Done
 def chat():
     """Handle chat messages."""
     try:
@@ -198,12 +217,10 @@ def chat():
         new = data.get("new", None)
         file_type = data.get("file_type", "")
         file_uris = data.get("file_uris", [])
-        
+        chat_history = data.get("chat_history", [])  # Receive chat history from frontend
+
         if not user_id or not session_id or not user_message:
             return jsonify({"error": "Missing user_id, session_id, or message"}), 400
-
-        # Fetch chat history
-        chat_history = get_chat_history(user_id, session_id)
 
         # Generate AI response
         try:
@@ -219,9 +236,9 @@ def chat():
                 print(f"Error generating title: {e}")
                 title = "Untitled"
             return jsonify({"response": ai_response, "title": title, "file_type": file_type, "file_uri": file_uris})
-        
+
         return jsonify({"response": ai_response, "file_type": file_type, "file_uri": file_uris})
-    
+
     except Exception as e:
         print(f"Error in /chat route: {e}")
         return jsonify({"error": "An unexpected error occurred"}), 500
