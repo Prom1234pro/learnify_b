@@ -14,7 +14,9 @@ load_dotenv()
 
 
 # firebase_creds_json = base64.b64decode(os.getenv("FIREBASE_CREDENTIALS")).decode("utf-8")
-# firebase_creds = json.loads(firebase_creds_json)
+# print(firebase_creds_json)
+# FIREBASE_CREDENTIALS = json.loads(firebase_creds_json)
+# print(FIREBASE_CREDENTIALS)
 # cred = credentials.Certificate(firebase_creds)
 # firebase_admin.initialize_app(cred)
 # db = firestore.client()
@@ -169,6 +171,20 @@ def generate_title(user_message): #Done
         return f"Error generating title: {str(e)}"
 
 
+@app.route("/api/firebase-config", methods=["GET"])
+def get_firebase_config():
+    """Return a safe Firebase config for the frontend (without private keys)."""
+
+    FIREBASE_CONFIG = {
+        "apiKey": os.getenv("FIREBASE_API_KEY"),
+        "authDomain": os.getenv("FIREBASE_AUTH_DOMAIN"),
+        "projectId": os.getenv("FIREBASE_PROJECT_ID"),
+        "storageBucket": os.getenv("FIREBASE_STORAGE_BUCKET"),
+        "messagingSenderId": os.getenv("FIREBASE_MESSAGING_SENDER_ID"),
+        "appId": os.getenv("FIREBASE_APP_ID"),
+    }
+    return jsonify(FIREBASE_CONFIG)
+
 @app.route("/upload", methods=["POST"]) #Done
 def upload_file():
     """Upload a PDF file and store it for AI reference."""
@@ -269,4 +285,4 @@ def summary():
         return jsonify({"error": f"An unexpected error occurred: {str(e)}"}), 500
 
 if __name__ == "__main__":
-    app.run(debug=False)
+    app.run(debug=True)
