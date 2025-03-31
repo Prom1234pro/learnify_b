@@ -17,7 +17,7 @@ Flask-SocketIO
 firebase-admin
 # Flask-SQLAlchemy
 # Flask-UUID
-# gunicorn
+gunicorn
 google-ai-generativelanguage
 google-api-core
 google-api-python-client
