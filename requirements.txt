@@ -30,6 +30,8 @@ googleapis-common-protos
 pdf2image
 pillow
 PyPDF2
+PyMuPDF
+pyparsing
 # psycopg2-binary
 # PyJWT
 # pyodbc
