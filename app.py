@@ -5,6 +5,14 @@ from dotenv import load_dotenv
 # import base64
 # import firebase_admin
 # from firebase_admin import credentials, firestore
+import os
+import io
+from PIL import Image, ImageDraw, ImageFont
+import fitz  # PyMuPDF
+import cloudinary
+import cloudinary.uploader
+from docx import Document
+import tempfile
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import google.generativeai as genai
@@ -27,8 +35,14 @@ CORS(app)
 
 genai.configure(api_key=os.getenv("GENAI_API_KEY"))
 uploaded_files = {}
+
 UPLOAD_FOLDER = "uploads"
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)  # Ensure upload folder exists
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+cloudinary.config(
+    cloud_name=os.getenv("CLOUDINARY_NAME"),
+    api_key=os.getenv("CLOUDINARY_API_KEY"),
+    api_secret=os.getenv("CLOUDINARY_API_SECRET")
+)
 
 
 # def get_chat_history(user_id, session_id): #Done
@@ -118,6 +132,33 @@ def generate_gemini_response(chat_history, user_message, file_uris=None): #Done
         return f"Error generating AI response: {str(e)}"
 
 
+def generate_markdown(file_uri=None): #Done
+    """Send chat history and user question to Gemini API and return response."""
+    if file_uri == "" or file_uri == None:
+        return ""
+    try:
+        # Use the correct model name
+        model = genai.GenerativeModel(
+            model_name="gemini-1.5-flash",
+            generation_config={
+                "temperature": 1,
+                "top_p": 0.95,
+                "top_k": 64,
+                "max_output_tokens": 8192,
+                "response_mime_type": 'text/plain',
+            },
+            system_instruction="""I want you to generate a markdown on this 
+            document uploaded containing the exact content"""
+        )
+        message = [{"role": "user", "parts": [{"file_data": {"file_uri": file_uri}}]}]
+        response = model.generate_content(message)
+
+        return response.text.strip() if response else ""
+    except KeyError as e:
+        return f"Missing key in chat history: {str(e)}"
+    except Exception as e:
+        return f"Error generating AI response: {str(e)}"
+    
 def generate_summary_response(user_message, file_uri=None): #Done
     """Generate a summary based on the provided message or file."""
     try:
@@ -185,9 +226,51 @@ def get_firebase_config():
     }
     return jsonify(FIREBASE_CONFIG)
 
-@app.route("/upload", methods=["POST"]) #Done
+def generate_preview_image(file, ext):
+    """Generate preview image from PDF, DOCX, or TXT."""
+    img_buffer = io.BytesIO()
+
+    if ext == ".pdf":
+        doc = fitz.open(stream=file.read(), filetype="pdf")
+        page = doc.load_page(0)
+        pix = page.get_pixmap(dpi=150)
+        img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+        img.save(img_buffer, format="PNG")
+
+    elif ext == ".docx":
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as temp_docx:
+            file.save(temp_docx.name)
+            document = Document(temp_docx.name)
+            text = "\n".join([p.text for p in document.paragraphs][:10])
+            img = text_to_image(text)
+            img.save(img_buffer, format="PNG")
+            os.unlink(temp_docx.name)
+
+    elif ext == ".txt":
+        text = file.read().decode("utf-8")[:1000]
+        img = text_to_image(text)
+        img.save(img_buffer, format="PNG")
+
+    else:
+        return None
+
+    img_buffer.seek(0)
+    upload_result = cloudinary.uploader.upload(img_buffer, folder="previews")
+    return upload_result["secure_url"]
+
+def text_to_image(text, width=800, height=600, font_size=20):
+    img = Image.new("RGB", (width, height), color="white")
+    draw = ImageDraw.Draw(img)
+    try:
+        font = ImageFont.truetype("arial.ttf", font_size)
+    except:
+        font = ImageFont.load_default()
+    draw.text((10, 10), text, fill="black", font=font)
+    return img
+
+@app.route("/upload", methods=["POST"])
 def upload_file():
-    """Upload a PDF file and store it for AI reference."""
+    """Upload a file and generate a preview image if possible."""
     try:
         if "file" not in request.files:
             return jsonify({"error": "No file provided"}), 400
@@ -199,23 +282,44 @@ def upload_file():
         if not file.filename:
             return jsonify({"error": "No selected file"}), 400
 
-        # Ensure filename is safe
         filename = os.path.join(UPLOAD_FOLDER, file.filename)
+        ext = os.path.splitext(file.filename)[1].lower()
 
-        # Save the file locally first
+        # Save file temporarily
         file.save(filename)
 
         # Upload file to Gemini AI
         uploaded_file = genai.upload_file(filename)
-
-        # Store the uploaded file URI
         uploaded_files[user_id] = uploaded_file.uri
 
-        # Delete the temporary file
-        os.remove(filename)
+        # Generate image preview
+        with open(filename, "rb") as f:
+            image_preview_url = generate_preview_image(f, ext)
 
-        return jsonify({"message": "File uploaded successfully", "file_uri": uploaded_file.uri, "file_type": file_type})
-    
+        # Clean up local file
+        os.remove(filename)
+        print(uploaded_file.uri)
+
+        markdown = generate_markdown(uploaded_file.uri)
+        if markdown == "":
+            print("here")
+            return jsonify({
+                "message": "File uploaded successfully",
+                "file_uri": uploaded_file.uri,
+                "file_type": file_type,
+                "imagePreviewUri": image_preview_url,
+                "markdown": None
+            })
+        else:
+            return jsonify({
+                "message": "File uploaded successfully",
+                "file_uri": uploaded_file.uri,
+                "file_type": file_type,
+                "imagePreviewUri": image_preview_url,
+                "markdown": markdown
+            })
+
+
     except FileNotFoundError:
         return jsonify({"error": "File path is invalid or missing"}), 500
     except Exception as e:
@@ -235,9 +339,12 @@ def chat():
         file_uris = data.get("file_uris", [])
         chat_history = data.get("chat_history", [])  # Receive chat history from frontend
 
-        if not user_id or not session_id or not user_message:
+        if not user_id or not session_id:
             return jsonify({"error": "Missing user_id, session_id, or message"}), 400
-
+        
+        print(user_message, file_uris)
+        if user_message == "" and len(file_uris) == 0:
+            return jsonify({"error": "Missing files or message"}), 400
         # Generate AI response
         try:
             ai_response = generate_gemini_response(chat_history, user_message, file_uris)
@@ -285,4 +392,4 @@ def summary():
         return jsonify({"error": f"An unexpected error occurred: {str(e)}"}), 500
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=False)
