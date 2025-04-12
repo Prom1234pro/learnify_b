@@ -1,11 +1,5 @@
 import os
-# from datetime import datetime
 from dotenv import load_dotenv
-# import json
-# import base64
-# import firebase_admin
-# from firebase_admin import credentials, firestore
-import os
 import io
 from PIL import Image, ImageDraw, ImageFont
 import fitz  # PyMuPDF
@@ -17,6 +11,11 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import google.generativeai as genai
 
+# from datetime import datetime
+# import json
+# import base64
+# import firebase_admin
+# from firebase_admin import credentials, firestore
 
 load_dotenv()
 
@@ -392,4 +391,4 @@ def summary():
         return jsonify({"error": f"An unexpected error occurred: {str(e)}"}), 500
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", debug=True)
+    app.run(host="0.0.0.0", debug=False)
